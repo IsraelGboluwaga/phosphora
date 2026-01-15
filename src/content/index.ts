@@ -1,6 +1,6 @@
-const VERSE_PATTERN = /\b(John\s+3:16)\b/gi;
+import { detectVerses, formatReference, VerseMatch } from './detector';
 
-const DUMMY_TEXT = 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.';
+const DUMMY_TEXT = 'Verse text will appear here once API integration is complete.';
 
 let tooltip: HTMLDivElement | null = null;
 
@@ -27,40 +27,50 @@ function hideTooltip() {
   }
 }
 
-function sendVerseToSidePanel(reference: string) {
+function sendVerseToSidePanel(reference: string, verseData: VerseMatch) {
   chrome.runtime.sendMessage({
     type: 'SHOW_VERSE',
     payload: {
       reference: reference,
-      text: DUMMY_TEXT
+      text: DUMMY_TEXT,
+      book: verseData.book,
+      chapter: verseData.chapter,
+      verseStart: verseData.verseStart,
+      verseEnd: verseData.verseEnd,
     }
   });
 }
 
-function wrapMatches(textNode: Text, pattern: RegExp): void {
+function wrapMatches(textNode: Text): void {
   const text = textNode.textContent || '';
-  const matches = text.match(pattern);
+  const matches = detectVerses(text);
 
-  if (!matches) return;
+  if (matches.length === 0) return;
 
   const fragment = document.createDocumentFragment();
   let lastIndex = 0;
 
-  text.replace(pattern, (match, _group, offset) => {
-    if (offset > lastIndex) {
-      fragment.appendChild(document.createTextNode(text.slice(lastIndex, offset)));
+  for (const match of matches) {
+    // Add text before this match
+    if (match.index > lastIndex) {
+      fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
     }
 
+    // Create highlighted span
     const span = document.createElement('span');
     span.className = 'phosphora-verse';
-    span.dataset.verse = match;
-    span.textContent = match;
+    span.dataset.verse = formatReference(match);
+    span.dataset.book = match.book;
+    span.dataset.chapter = String(match.chapter);
+    if (match.verseStart) span.dataset.verseStart = String(match.verseStart);
+    if (match.verseEnd) span.dataset.verseEnd = String(match.verseEnd);
+    span.textContent = match.raw;
     fragment.appendChild(span);
 
-    lastIndex = offset + match.length;
-    return match;
-  });
+    lastIndex = match.index + match.raw.length;
+  }
 
+  // Add remaining text
   if (lastIndex < text.length) {
     fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
   }
@@ -76,10 +86,13 @@ function processDocument(): void {
       acceptNode(node) {
         const parent = node.parentElement;
         if (!parent) return NodeFilter.FILTER_REJECT;
-        if (['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) {
+        if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(parent.tagName)) {
           return NodeFilter.FILTER_REJECT;
         }
         if (parent.closest('.phosphora-verse')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (parent.isContentEditable) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -93,7 +106,7 @@ function processDocument(): void {
     textNodes.push(node as Text);
   }
 
-  textNodes.forEach(textNode => wrapMatches(textNode, VERSE_PATTERN));
+  textNodes.forEach(textNode => wrapMatches(textNode));
 }
 
 function init() {
@@ -102,7 +115,8 @@ function init() {
   document.addEventListener('mouseover', (e) => {
     const target = e.target as HTMLElement;
     if (target.classList.contains('phosphora-verse')) {
-      showTooltip(target, DUMMY_TEXT);
+      const ref = target.dataset.verse || '';
+      showTooltip(target, `${ref}\n${DUMMY_TEXT}`);
     }
   });
 
@@ -116,8 +130,16 @@ function init() {
   document.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     if (target.classList.contains('phosphora-verse')) {
-      const reference = target.dataset.verse || target.textContent || '';
-      sendVerseToSidePanel(reference);
+      const reference = target.dataset.verse || '';
+      const verseData: VerseMatch = {
+        raw: target.textContent || '',
+        book: target.dataset.book || '',
+        chapter: parseInt(target.dataset.chapter || '0', 10),
+        verseStart: target.dataset.verseStart ? parseInt(target.dataset.verseStart, 10) : undefined,
+        verseEnd: target.dataset.verseEnd ? parseInt(target.dataset.verseEnd, 10) : undefined,
+        index: 0,
+      };
+      sendVerseToSidePanel(reference, verseData);
     }
   });
 
