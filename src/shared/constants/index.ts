@@ -69,14 +69,3 @@ export const BIBLE_BOOKS: Record<string, string[]> = {
   Jude: ['Jude', 'Jud', 'Jd'],
   Revelation: ['Revelation', 'Rev', 'Re', 'Rv', 'Apocalypse'],
 };
-
-export const DEFAULT_SETTINGS = {
-  enabled: true,
-  translation: 'KJV',
-  highlightColor: '#FEF3C7',
-  highlightStyle: 'background' as const,
-};
-
-export const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-export const API_BASE_URL = 'https://bible-api.com';

@@ -1,7 +1,5 @@
 import { detectVerses, formatReference, VerseMatch } from './detector';
 
-const DUMMY_TEXT = 'Verse text will appear here once API integration is complete.';
-
 let tooltip: HTMLDivElement | null = null;
 
 function createTooltip(): HTMLDivElement {
@@ -11,15 +9,17 @@ function createTooltip(): HTMLDivElement {
   return el;
 }
 
-function showTooltip(target: HTMLElement, text: string) {
+function showTooltip(target: HTMLElement, html: string) {
   if (!tooltip) tooltip = createTooltip();
 
   const rect = target.getBoundingClientRect();
-  tooltip.textContent = text;
+  tooltip.innerHTML = html;
   tooltip.classList.add('visible');
   tooltip.style.top = `${window.scrollY + rect.bottom + 8}px`;
   tooltip.style.left = `${window.scrollX + rect.left}px`;
 }
+
+let hideTimeout: number | null = null;
 
 function hideTooltip() {
   if (tooltip) {
@@ -27,12 +27,26 @@ function hideTooltip() {
   }
 }
 
+function hideTooltipWithDelay() {
+  hideTimeout = window.setTimeout(() => {
+    hideTooltip();
+    hideTimeout = null;
+  }, 100);
+}
+
+function cancelHideTooltip() {
+  if (hideTimeout !== null) {
+    clearTimeout(hideTimeout);
+    hideTimeout = null;
+  }
+}
+
 function sendVerseToSidePanel(reference: string, verseData: VerseMatch) {
+  if (!chrome.runtime?.id) return; // Extension context invalidated
   chrome.runtime.sendMessage({
     type: 'SHOW_VERSE',
     payload: {
-      reference: reference,
-      text: DUMMY_TEXT,
+      reference,
       book: verseData.book,
       chapter: verseData.chapter,
       verseStart: verseData.verseStart,
@@ -109,21 +123,80 @@ function processDocument(): void {
   textNodes.forEach(textNode => wrapMatches(textNode));
 }
 
+function prefetchVerses() {
+  const verseElements = document.querySelectorAll('.phosphora-verse');
+  const requests: Array<{
+    book: string;
+    chapter: number;
+    verseStart?: number;
+    verseEnd?: number;
+  }> = [];
+
+  verseElements.forEach((el) => {
+    const htmlEl = el as HTMLElement;
+    const book = htmlEl.dataset.book;
+    const chapter = htmlEl.dataset.chapter;
+    const verseStart = htmlEl.dataset.verseStart;
+    const verseEnd = htmlEl.dataset.verseEnd;
+
+    if (book && chapter) {
+      requests.push({
+        book,
+        chapter: parseInt(chapter, 10),
+        verseStart: verseStart ? parseInt(verseStart, 10) : undefined,
+        verseEnd: verseEnd ? parseInt(verseEnd, 10) : undefined,
+      });
+    }
+  });
+
+  if (requests.length > 0 && chrome.runtime?.id) {
+    chrome.runtime.sendMessage({ type: 'PREFETCH_VERSES', payload: requests });
+  }
+}
+
 function init() {
   processDocument();
+  prefetchVerses();
 
   document.addEventListener('mouseover', (e) => {
     const target = e.target as HTMLElement;
+
+    // Cancel hide if entering tooltip
+    if (target.id === 'phosphora-tooltip' || target.closest('#phosphora-tooltip')) {
+      cancelHideTooltip();
+      return;
+    }
+
     if (target.classList.contains('phosphora-verse')) {
+      cancelHideTooltip();
       const ref = target.dataset.verse || '';
-      showTooltip(target, `${ref}\n${DUMMY_TEXT}`);
+
+      // Request cached verse from background
+      if (!chrome.runtime?.id) {
+        showTooltip(target, `<strong>${ref}</strong>`);
+        return;
+      }
+      chrome.runtime.sendMessage(
+        { type: 'GET_CACHED_VERSE', payload: { reference: ref } },
+        (response) => {
+          if (response?.text) {
+            showTooltip(target, `<strong>${response.reference}</strong> (${response.translation})<br>${response.text}`);
+          } else {
+            showTooltip(target, `<strong>${ref}</strong>`);
+          }
+        }
+      );
     }
   });
 
   document.addEventListener('mouseout', (e) => {
     const target = e.target as HTMLElement;
-    if (target.classList.contains('phosphora-verse')) {
-      hideTooltip();
+
+    // Start delayed hide when leaving verse or tooltip
+    if (target.classList.contains('phosphora-verse') ||
+        target.id === 'phosphora-tooltip' ||
+        target.closest('#phosphora-tooltip')) {
+      hideTooltipWithDelay();
     }
   });
 
