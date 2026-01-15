@@ -1,0 +1,16 @@
+{
+  "name": "phosphora",
+  "version": "0.1.0",
+  "description": "Bible verse reference highlighter Chrome extension",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0",
+    "vite-plugin-static-copy": "^1.0.0"
+  }
+}
