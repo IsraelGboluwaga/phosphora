@@ -1,5 +1,64 @@
 import { detectVerses, formatReference, VerseMatch } from './detector';
 
+// --- Theme Detection Utilities ---
+
+type Theme = 'light' | 'dark';
+
+function parseColor(color: string): { r: number; g: number; b: number; a: number } | null {
+  // Handle rgb/rgba
+  const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (rgbMatch) {
+    return {
+      r: parseInt(rgbMatch[1], 10),
+      g: parseInt(rgbMatch[2], 10),
+      b: parseInt(rgbMatch[3], 10),
+      a: rgbMatch[4] ? parseFloat(rgbMatch[4]) : 1,
+    };
+  }
+
+  // Handle 'transparent'
+  if (color === 'transparent') {
+    return { r: 0, g: 0, b: 0, a: 0 };
+  }
+
+  return null;
+}
+
+function getLuminance(r: number, g: number, b: number): number {
+  // Relative luminance formula
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function isLightColor(r: number, g: number, b: number): boolean {
+  return getLuminance(r, g, b) > 0.5;
+}
+
+function getEffectiveBackgroundColor(element: HTMLElement): { r: number; g: number; b: number } {
+  let current: HTMLElement | null = element;
+
+  while (current) {
+    const bg = getComputedStyle(current).backgroundColor;
+    const parsed = parseColor(bg);
+
+    if (parsed && parsed.a > 0.1) {
+      // Found a non-transparent background
+      return { r: parsed.r, g: parsed.g, b: parsed.b };
+    }
+
+    current = current.parentElement;
+  }
+
+  // Default to white if no background found
+  return { r: 255, g: 255, b: 255 };
+}
+
+function getThemeForElement(element: HTMLElement): Theme {
+  const bg = getEffectiveBackgroundColor(element);
+  return isLightColor(bg.r, bg.g, bg.b) ? 'light' : 'dark';
+}
+
+// --- Tooltip ---
+
 let tooltip: HTMLDivElement | null = null;
 
 function createTooltip(): HTMLDivElement {
@@ -9,11 +68,12 @@ function createTooltip(): HTMLDivElement {
   return el;
 }
 
-function showTooltip(target: HTMLElement, html: string) {
+function showTooltip(target: HTMLElement, html: string, theme: Theme = 'light') {
   if (!tooltip) tooltip = createTooltip();
 
   const rect = target.getBoundingClientRect();
   tooltip.innerHTML = html;
+  tooltip.dataset.theme = theme;
   tooltip.classList.add('visible');
   tooltip.style.top = `${window.scrollY + rect.bottom + 8}px`;
   tooltip.style.left = `${window.scrollX + rect.left}px`;
@@ -79,6 +139,13 @@ function wrapMatches(textNode: Text): void {
     if (match.verseStart) span.dataset.verseStart = String(match.verseStart);
     if (match.verseEnd) span.dataset.verseEnd = String(match.verseEnd);
     span.textContent = match.raw;
+
+    // Detect theme based on parent's background
+    const parent = textNode.parentElement;
+    if (parent) {
+      span.dataset.theme = getThemeForElement(parent);
+    }
+
     fragment.appendChild(span);
 
     lastIndex = match.index + match.raw.length;
@@ -170,19 +237,20 @@ function init() {
     if (target.classList.contains('phosphora-verse')) {
       cancelHideTooltip();
       const ref = target.dataset.verse || '';
+      const theme = (target.dataset.theme as Theme) || 'light';
 
       // Request cached verse from background
       if (!chrome.runtime?.id) {
-        showTooltip(target, `<strong>${ref}</strong>`);
+        showTooltip(target, `<strong>${ref}</strong>`, theme);
         return;
       }
       chrome.runtime.sendMessage(
         { type: 'GET_CACHED_VERSE', payload: { reference: ref } },
         (response) => {
           if (response?.text) {
-            showTooltip(target, `<strong>${response.reference}</strong> (${response.translation})<br>${response.text}`);
+            showTooltip(target, `<strong>${response.reference}</strong> (${response.translation})<br>${response.text}`, theme);
           } else {
-            showTooltip(target, `<strong>${ref}</strong>`);
+            showTooltip(target, `<strong>${ref}</strong>`, theme);
           }
         }
       );
