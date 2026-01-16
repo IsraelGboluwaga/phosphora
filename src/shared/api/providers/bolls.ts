@@ -1,4 +1,4 @@
-import type { BibleAPIProvider, VerseRequest, VerseResponse } from "../types";
+import type { BibleAPIProvider, ChapterData, VerseRequest, VerseResponse } from "../types";
 
 const BASE_URL = "https://bolls.life";
 
@@ -296,5 +296,36 @@ export const bollsProvider: BibleAPIProvider = {
     }
 
     return results;
+  },
+
+  async fetchChapter(
+    book: string,
+    chapter: number,
+    translation = "NKJV"
+  ): Promise<ChapterData> {
+    const bookNum = BOOK_NUMBERS[book];
+    if (!bookNum) {
+      throw new Error(`Unknown book: ${book}`);
+    }
+
+    const url = `${BASE_URL}/get-text/${translation}/${bookNum}/${chapter}/`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch chapter: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const verses = data.map((v: { verse: number; text: string }) => ({
+      verse: v.verse,
+      text: stripHtml(v.text),
+    }));
+
+    return {
+      book,
+      chapter,
+      verses,
+      translation,
+    };
   },
 };

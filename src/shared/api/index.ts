@@ -1,5 +1,5 @@
 import { bollsProvider } from './providers/bolls';
-import type { VerseRequest, VerseResponse } from './types';
+import type { ChapterData, VerseRequest, VerseResponse } from './types';
 
 // Swap provider by changing this line
 export const bibleApi = bollsProvider;
@@ -13,4 +13,8 @@ export async function fetchVerses(requests: VerseRequest[], translation?: string
   return bibleApi.fetchVerses(requests, translation);
 }
 
-export type { BibleAPIProvider, VerseRequest, VerseResponse } from './types';
+export async function fetchChapter(book: string, chapter: number, translation?: string): Promise<ChapterData> {
+  return bibleApi.fetchChapter(book, chapter, translation);
+}
+
+export type { BibleAPIProvider, ChapterData, ChapterVerse, VerseRequest, VerseResponse } from './types';

@@ -1,5 +1,5 @@
 import { bibleApi } from '@shared/api';
-import type { VerseRequest } from '@shared/api';
+import type { ChapterData, VerseRequest } from '@shared/api';
 
 // Allow panel to open on action click, manage per-tab visibility via onActivated
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -85,40 +85,91 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Store verse data per-tab so each tab has its own content
     const verseKey = tabId ? `currentVerse:${tabId}` : 'currentVerse';
 
-    // Check cache first
-    const cacheKey = getCacheKey(reference);
-    chrome.storage.session.get(cacheKey).then((result) => {
-      if (result[cacheKey]) {
-        // Use cached verse
-        chrome.storage.session.set({ [verseKey]: result[cacheKey] });
-      } else {
-        // Set loading state and fetch
-        chrome.storage.session.set({
-          [verseKey]: { reference, text: 'Loading...' },
-        });
+    // If verseStart is defined, fetch full chapter with highlighting
+    // Otherwise (chapter-only reference), use old behavior
+    if (verseStart) {
+      const chapterCacheKey = `chapter:${book}:${chapter}`;
 
-        bibleApi
-          .fetchVerse({ book, chapter, verseStart, verseEnd })
-          .then((response) => {
-            const verseData = {
-              reference: response.reference,
-              text: response.text,
-              translation: response.translation,
-            };
-            // Store in cache and display
-            chrome.storage.session.set({
-              [cacheKey]: verseData,
-              [verseKey]: verseData,
-            });
-          })
-          .catch((error) => {
-            console.error('[Phosphora] Failed to fetch verse:', error);
-            chrome.storage.session.set({
-              [verseKey]: { reference, text: 'Failed to load verse.' },
-            });
+      chrome.storage.session.get(chapterCacheKey).then((result) => {
+        if (result[chapterCacheKey]) {
+          // Use cached chapter data with new highlight info
+          const chapterData = result[chapterCacheKey] as ChapterData;
+          chrome.storage.session.set({
+            [verseKey]: {
+              type: 'chapter',
+              book,
+              chapter,
+              verses: chapterData.verses,
+              translation: chapterData.translation,
+              highlightStart: verseStart,
+              highlightEnd: verseEnd || verseStart,
+            },
           });
-      }
-    });
+        } else {
+          // Set loading state
+          chrome.storage.session.set({
+            [verseKey]: { type: 'loading', reference },
+          });
+
+          bibleApi
+            .fetchChapter(book, chapter)
+            .then((chapterData) => {
+              // Cache the chapter data
+              chrome.storage.session.set({ [chapterCacheKey]: chapterData });
+              // Display with highlight info
+              chrome.storage.session.set({
+                [verseKey]: {
+                  type: 'chapter',
+                  book,
+                  chapter,
+                  verses: chapterData.verses,
+                  translation: chapterData.translation,
+                  highlightStart: verseStart,
+                  highlightEnd: verseEnd || verseStart,
+                },
+              });
+            })
+            .catch((error) => {
+              console.error('[Phosphora] Failed to fetch chapter:', error);
+              chrome.storage.session.set({
+                [verseKey]: { type: 'error', reference, text: 'Failed to load chapter.' },
+              });
+            });
+        }
+      });
+    } else {
+      // Chapter-only reference - use old behavior (just show the chapter text)
+      const cacheKey = getCacheKey(reference);
+      chrome.storage.session.get(cacheKey).then((result) => {
+        if (result[cacheKey]) {
+          chrome.storage.session.set({ [verseKey]: result[cacheKey] });
+        } else {
+          chrome.storage.session.set({
+            [verseKey]: { reference, text: 'Loading...' },
+          });
+
+          bibleApi
+            .fetchVerse({ book, chapter, verseStart, verseEnd })
+            .then((response) => {
+              const verseData = {
+                reference: response.reference,
+                text: response.text,
+                translation: response.translation,
+              };
+              chrome.storage.session.set({
+                [cacheKey]: verseData,
+                [verseKey]: verseData,
+              });
+            })
+            .catch((error) => {
+              console.error('[Phosphora] Failed to fetch verse:', error);
+              chrome.storage.session.set({
+                [verseKey]: { reference, text: 'Failed to load verse.' },
+              });
+            });
+        }
+      });
+    }
   }
 
   return true;
