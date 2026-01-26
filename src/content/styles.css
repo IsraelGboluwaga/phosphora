@@ -1,8 +1,8 @@
 /* Light theme (default) - for light backgrounds */
 .phosphora-verse,
 .phosphora-verse[data-theme="light"] {
-  background-color: #e8f5d6;
-  color: #2d3a2e;
+  background-color: var(--phosphora-highlight-bg, #e8f5d6);
+  color: var(--phosphora-text-primary, #2d3a2e);
   border-radius: 2px;
   padding: 0 2px;
   cursor: pointer;
@@ -11,17 +11,17 @@
 
 .phosphora-verse:hover,
 .phosphora-verse[data-theme="light"]:hover {
-  background-color: #d2edaf;
+  background-color: var(--phosphora-highlight-hover, #d2edaf);
 }
 
 /* Dark theme - for dark backgrounds */
 .phosphora-verse[data-theme="dark"] {
-  background-color: #3d5a3e;
-  color: #e8f5d6;
+  background-color: var(--phosphora-dark-highlight-bg, #3d5a3e);
+  color: var(--phosphora-dark-text, #e8f5d6);
 }
 
 .phosphora-verse[data-theme="dark"]:hover {
-  background-color: #4a6b4d;
+  background-color: var(--phosphora-dark-highlight-hover, #4a6b4d);
 }
 
 /* Tooltip base styles */
@@ -42,8 +42,8 @@
   white-space: pre-line;
   /* Default to light theme */
   background: white;
-  color: #2d3a2e;
-  border-left: 3px solid #a8d86e;
+  color: var(--phosphora-text-primary, #2d3a2e);
+  border-left: 3px solid var(--phosphora-accent, #a8d86e);
 }
 
 #phosphora-tooltip.visible {
@@ -55,5 +55,5 @@
 #phosphora-tooltip[data-theme="dark"] {
   background: #1f2937;
   color: #f9fafb;
-  border-left: 3px solid #4a6b4d;
+  border-left: 3px solid var(--phosphora-dark-accent, #4a6b4d);
 }

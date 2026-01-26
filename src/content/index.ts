@@ -1,4 +1,42 @@
 import { detectVerses, formatReference, VerseMatch } from './detector';
+import { DEFAULT_THEME, THEME_STORAGE_KEY, getThemeCSS } from '@shared/themes';
+
+// --- Color Theme Injection ---
+
+function injectColorTheme(themeName: string) {
+  let styleEl = document.getElementById('phosphora-theme') as HTMLStyleElement | null;
+
+  if (themeName === DEFAULT_THEME) {
+    // Default theme uses CSS fallback values, no override needed
+    if (styleEl) styleEl.remove();
+    return;
+  }
+
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'phosphora-theme';
+    document.head.appendChild(styleEl);
+  }
+
+  styleEl.textContent = getThemeCSS(themeName);
+}
+
+function loadAndApplyTheme() {
+  if (!chrome.storage?.sync) return;
+  chrome.storage.sync.get(THEME_STORAGE_KEY, (result) => {
+    const theme = result[THEME_STORAGE_KEY] ?? DEFAULT_THEME;
+    injectColorTheme(theme);
+  });
+}
+
+function listenForThemeChanges() {
+  if (!chrome.storage?.sync) return;
+  chrome.storage.sync.onChanged.addListener((changes) => {
+    if (changes[THEME_STORAGE_KEY]?.newValue) {
+      injectColorTheme(changes[THEME_STORAGE_KEY].newValue);
+    }
+  });
+}
 
 // --- Theme Detection Utilities ---
 
@@ -222,6 +260,8 @@ function prefetchVerses() {
 }
 
 function init() {
+  loadAndApplyTheme();
+  listenForThemeChanges();
   processDocument();
   prefetchVerses();
 
