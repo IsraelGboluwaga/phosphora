@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, build as viteBuild } from 'vite';
 import { resolve } from 'path';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
@@ -18,13 +18,39 @@ export default defineConfig({
         { src: 'src/sidepanel/index.html', dest: '.', rename: 'sidepanel.html' },
       ],
     }),
+    {
+      name: 'build-content-script',
+      async closeBundle() {
+        await viteBuild({
+          configFile: false,
+          resolve: {
+            alias: {
+              '@': resolve(__dirname, 'src'),
+              '@shared': resolve(__dirname, 'src/shared'),
+              '@content': resolve(__dirname, 'src/content'),
+            },
+          },
+          build: {
+            outDir: resolve(__dirname, 'dist'),
+            emptyOutDir: false,
+            rollupOptions: {
+              input: resolve(__dirname, 'src/content/index.ts'),
+              output: {
+                entryFileNames: 'content.js',
+                format: 'iife',
+              },
+            },
+          },
+          publicDir: false,
+        });
+      },
+    },
   ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        content: resolve(__dirname, 'src/content/index.ts'),
         background: resolve(__dirname, 'src/background/index.ts'),
         sidepanel: resolve(__dirname, 'src/sidepanel/index.ts'),
       },

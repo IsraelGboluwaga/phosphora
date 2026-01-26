@@ -1,3 +1,64 @@
+import { THEMES, DEFAULT_THEME, THEME_STORAGE_KEY, type ThemeColors } from '@shared/themes';
+
+// --- Theme Management ---
+
+const themePickerEl = document.getElementById('theme-picker')!;
+
+function applyThemeToRoot(theme: ThemeColors) {
+  const root = document.documentElement;
+  root.style.setProperty('--phosphora-highlight-bg', theme.highlightBg);
+  root.style.setProperty('--phosphora-highlight-hover', theme.highlightHover);
+  root.style.setProperty('--phosphora-accent', theme.accent);
+  root.style.setProperty('--phosphora-text-primary', theme.textPrimary);
+  root.style.setProperty('--phosphora-text-secondary', theme.textSecondary);
+  root.style.setProperty('--phosphora-text-muted', theme.textMuted);
+  root.style.setProperty('--phosphora-surface', theme.surface);
+  root.style.setProperty('--phosphora-verse-num', theme.verseNum);
+  root.style.setProperty('--phosphora-dark-highlight-bg', theme.darkHighlightBg);
+  root.style.setProperty('--phosphora-dark-highlight-hover', theme.darkHighlightHover);
+  root.style.setProperty('--phosphora-dark-accent', theme.darkAccent);
+  root.style.setProperty('--phosphora-dark-text', theme.darkText);
+}
+
+function setActiveDot(themeName: string) {
+  themePickerEl.querySelectorAll('.theme-dot').forEach((dot) => {
+    dot.classList.toggle('active', (dot as HTMLElement).dataset.theme === themeName);
+  });
+}
+
+function buildThemePicker(activeTheme: string) {
+  themePickerEl.innerHTML = '';
+  for (const [name, colors] of Object.entries(THEMES)) {
+    const dot = document.createElement('button');
+    dot.className = 'theme-dot';
+    dot.dataset.theme = name;
+    dot.style.backgroundColor = colors.accent;
+    dot.title = name.charAt(0).toUpperCase() + name.slice(1);
+    if (name === activeTheme) dot.classList.add('active');
+    dot.addEventListener('click', () => selectTheme(name));
+    themePickerEl.appendChild(dot);
+  }
+}
+
+function selectTheme(themeName: string) {
+  const theme = THEMES[themeName] ?? THEMES[DEFAULT_THEME];
+  applyThemeToRoot(theme);
+  setActiveDot(themeName);
+  chrome.storage.sync.set({ [THEME_STORAGE_KEY]: themeName });
+}
+
+async function initTheme() {
+  const result = await chrome.storage.sync.get(THEME_STORAGE_KEY);
+  const themeName: string = result[THEME_STORAGE_KEY] ?? DEFAULT_THEME;
+  const theme = THEMES[themeName] ?? THEMES[DEFAULT_THEME];
+  applyThemeToRoot(theme);
+  buildThemePicker(themeName);
+}
+
+initTheme();
+
+// --- Verse Display ---
+
 interface VerseData {
   reference: string;
   text: string;
