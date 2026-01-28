@@ -1,4 +1,7 @@
 import { BIBLE_BOOKS } from '@shared/constants';
+import { formatReference } from '@shared/utils';
+
+export { formatReference };
 
 export interface VerseMatch {
   raw: string;
@@ -75,15 +78,4 @@ export function detectVerses(text: string): VerseMatch[] {
   }
 
   return matches;
-}
-
-export function formatReference(match: VerseMatch): string {
-  let ref = `${match.book} ${match.chapter}`;
-  if (match.verseStart) {
-    ref += `:${match.verseStart}`;
-    if (match.verseEnd && match.verseEnd !== match.verseStart) {
-      ref += `-${match.verseEnd}`;
-    }
-  }
-  return ref;
 }

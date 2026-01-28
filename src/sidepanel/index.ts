@@ -1,4 +1,5 @@
 import { THEMES, DEFAULT_THEME, THEME_STORAGE_KEY, type ThemeColors } from '@shared/themes';
+import type { ChapterVerse } from '@shared/api/types';
 
 // --- Theme Management ---
 
@@ -63,11 +64,6 @@ interface VerseData {
   reference: string;
   text: string;
   translation?: string;
-}
-
-interface ChapterVerse {
-  verse: number;
-  text: string;
 }
 
 interface ChapterDisplayData {

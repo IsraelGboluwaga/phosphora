@@ -69,3 +69,8 @@ export const BIBLE_BOOKS: Record<string, string[]> = {
   Jude: ['Jude', 'Jud', 'Jd'],
   Revelation: ['Revelation', 'Rev', 'Re', 'Rv', 'Apocalypse'],
 };
+
+// Book name to API book number mapping (derived from BIBLE_BOOKS order)
+export const BOOK_NUMBERS: Record<string, number> = Object.fromEntries(
+  Object.keys(BIBLE_BOOKS).map((book, index) => [book, index + 1])
+);
