@@ -187,6 +187,12 @@ function getVerseKey(tabId: number | null): string {
 
 async function loadCurrentVerse() {
   currentTabId = await getCurrentTabId();
+
+  // Notify background that panel is now open for this tab
+  if (currentTabId) {
+    chrome.runtime.sendMessage({ type: 'PANEL_OPENED', payload: { tabId: currentTabId } });
+  }
+
   const verseKey = getVerseKey(currentTabId);
   const result = await chrome.storage.session.get(verseKey);
   if (result[verseKey]) {
@@ -198,6 +204,16 @@ chrome.storage.session.onChanged.addListener((changes) => {
   const verseKey = getVerseKey(currentTabId);
   if (changes[verseKey]?.newValue) {
     renderData(changes[verseKey].newValue);
+  }
+});
+
+// Update content when switching tabs
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  currentTabId = tabId;
+  const verseKey = getVerseKey(tabId);
+  const result = await chrome.storage.session.get(verseKey);
+  if (result[verseKey]) {
+    renderData(result[verseKey]);
   }
 });
 

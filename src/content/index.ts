@@ -139,18 +139,58 @@ function cancelHideTooltip() {
   }
 }
 
+// --- Hint Toast ---
+
+let hintToast: HTMLDivElement | null = null;
+let hintTimeout: number | null = null;
+
+function showHintToast() {
+  if (hintToast) return; // Already showing
+
+  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+  const shortcut = isMac ? '⌘+Shift+P' : 'Ctrl+Shift+P';
+
+  hintToast = document.createElement('div');
+  hintToast.id = 'phosphora-hint';
+  hintToast.innerHTML = `Press <strong>${shortcut}</strong> or click the <strong>Phosphora</strong> icon to view verses`;
+  document.body.appendChild(hintToast);
+
+  // Auto-hide after 4 seconds
+  hintTimeout = window.setTimeout(() => {
+    hideHintToast();
+  }, 4000);
+}
+
+function hideHintToast() {
+  if (hintToast) {
+    hintToast.remove();
+    hintToast = null;
+  }
+  if (hintTimeout) {
+    clearTimeout(hintTimeout);
+    hintTimeout = null;
+  }
+}
+
 function sendVerseToSidePanel(reference: string, verseData: VerseMatch) {
   if (!chrome.runtime?.id) return; // Extension context invalidated
-  chrome.runtime.sendMessage({
-    type: 'SHOW_VERSE',
-    payload: {
-      reference,
-      book: verseData.book,
-      chapter: verseData.chapter,
-      verseStart: verseData.verseStart,
-      verseEnd: verseData.verseEnd,
+  chrome.runtime.sendMessage(
+    {
+      type: 'SHOW_VERSE',
+      payload: {
+        reference,
+        book: verseData.book,
+        chapter: verseData.chapter,
+        verseStart: verseData.verseStart,
+        verseEnd: verseData.verseEnd,
+      },
+    },
+    (response) => {
+      if (response?.showHint) {
+        showHintToast();
+      }
     }
-  });
+  );
 }
 
 function wrapMatches(textNode: Text): void {
@@ -263,6 +303,13 @@ function init() {
   loadAndApplyTheme();
   listenForThemeChanges();
   processDocument();
+
+  // Enable or disable panel based on whether page has verses
+  const hasVerses = document.querySelectorAll('.phosphora-verse').length > 0;
+  if (chrome.runtime?.id) {
+    chrome.runtime.sendMessage({ type: hasVerses ? 'ENABLE_PANEL' : 'DISABLE_PANEL' });
+  }
+
   prefetchVerses();
 
   document.addEventListener('mouseover', (e) => {
