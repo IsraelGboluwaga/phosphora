@@ -57,3 +57,35 @@
   color: #f9fafb;
   border-left: 3px solid var(--phosphora-dark-accent, #4a6b4d);
 }
+
+/* Hint toast - shown when panel needs to be opened via icon */
+#phosphora-hint {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  padding: 12px 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: var(--phosphora-surface, #f8faf5);
+  color: var(--phosphora-text-primary, #2d3a2e);
+  border-left: 3px solid var(--phosphora-accent, #a8d86e);
+  animation: phosphora-hint-slide-in 0.3s ease;
+}
+
+#phosphora-hint strong {
+  color: var(--phosphora-accent, #a8d86e);
+}
+
+@keyframes phosphora-hint-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

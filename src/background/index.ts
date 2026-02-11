@@ -1,34 +1,36 @@
 import { bibleApi } from '@shared/api';
 import type { ChapterData, VerseRequest } from '@shared/api';
 
-// Allow panel to open on action click, manage per-tab visibility via onActivated
+// Allow panel to open on action click
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-// Track tabs with active side panels
-const activePanelTabs = new Set<number>();
-let lastActiveTabId: number | null = null;
+// Track tabs where panel has been opened (via extension icon)
+const openPanelTabs = new Set<number>();
 
-// When switching tabs, disable panel on the tab we're leaving (if it was active)
-// and enable on the tab we're switching to (if it's in our active set)
-chrome.tabs.onActivated.addListener(({ tabId }) => {
-  // Disable panel on the tab we're leaving
-  if (lastActiveTabId !== null && activePanelTabs.has(lastActiveTabId)) {
-    chrome.sidePanel.setOptions({ tabId: lastActiveTabId, enabled: false });
-  }
-
-  // Enable panel on new tab if it's in our active set
-  if (activePanelTabs.has(tabId)) {
-    chrome.sidePanel.setOptions({ tabId, enabled: true });
-  }
-
-  lastActiveTabId = tabId;
-});
+// Track tabs where panel is enabled (has verses)
+const enabledTabs = new Set<number>();
 
 // Clean up when tabs are closed
 chrome.tabs.onRemoved.addListener((tabId) => {
-  activePanelTabs.delete(tabId);
-  if (lastActiveTabId === tabId) {
-    lastActiveTabId = null;
+  openPanelTabs.delete(tabId);
+  enabledTabs.delete(tabId);
+  // Clear badge if this tab had one (ignore errors for already-closed tabs)
+  chrome.action.setBadgeText({ text: '', tabId }).catch(() => {});
+});
+
+// When switching tabs, close panel for tabs that haven't been enabled
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  if (!enabledTabs.has(tabId)) {
+    // This tab hasn't had ENABLE_PANEL sent (no verses or pre-opened tab)
+    // Close the panel for this tab
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId) {
+        await chrome.sidePanel.close({ tabId });
+      }
+    } catch {
+      // Tab may not exist or panel already closed - ignore
+    }
   }
 });
 
@@ -70,16 +72,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch((error) => {
         console.error('[Phosphora] Failed to prefetch verses:', error);
       });
+    return; // No response needed
+  }
+
+  // Content script enables panel when page has verses
+  if (message.type === 'ENABLE_PANEL') {
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      enabledTabs.add(tabId);
+      chrome.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: true });
+    }
+    return; // No response needed
+  }
+
+  // Content script disables panel when page has no verses
+  if (message.type === 'DISABLE_PANEL') {
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      enabledTabs.delete(tabId);
+      chrome.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: false });
+    }
+    return; // No response needed
+  }
+
+  // Sidepanel notifies us when it's opened
+  if (message.type === 'PANEL_OPENED') {
+    const { tabId } = message.payload;
+    if (tabId) {
+      openPanelTabs.add(tabId);
+      // Clear badge since panel is now open
+      chrome.action.setBadgeText({ text: '', tabId }).catch(() => {});
+    }
+    return; // No response needed
   }
 
   if (message.type === 'SHOW_VERSE') {
     const { reference, book, chapter, verseStart, verseEnd } = message.payload;
-
-    // Open side panel for this tab
     const tabId = sender.tab?.id;
-    if (tabId) {
-      activePanelTabs.add(tabId);
-      chrome.sidePanel.open({ tabId });
+
+    // If panel isn't open yet for this tab, show badge to prompt user
+    if (tabId && !openPanelTabs.has(tabId)) {
+      chrome.action.setBadgeText({ text: '1', tabId }).catch(() => {});
+      chrome.action.setBadgeBackgroundColor({ color: '#a8d86e', tabId }).catch(() => {});
+      // Tell content script to show a hint
+      sendResponse({ showHint: true });
+    } else {
+      sendResponse({ showHint: false });
     }
 
     // Store verse data per-tab so each tab has its own content
@@ -170,9 +208,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       });
     }
-  }
 
-  return true;
+    return true; // Keep channel open for async response (sendResponse called above)
+  }
 });
 
 console.log('[Phosphora] Background service worker loaded');
