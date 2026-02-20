@@ -4,3 +4,8 @@ dist/
 .DS_Store
 
 todo
+
+# Deployment docs (not branch-specific)
+deployChecklist.md
+privacyPolicy.md
+storeMetadata.md
