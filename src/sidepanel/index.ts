@@ -1,5 +1,7 @@
 import { THEMES, DEFAULT_THEME, THEME_STORAGE_KEY, type ThemeColors } from '@shared/themes';
 import type { ChapterVerse } from '@shared/api/types';
+import { BIBLE_BOOKS, BOOK_NUMBERS, BOOK_CHAPTER_COUNTS } from '@shared/constants';
+import { stripHtml } from '@shared/utils';
 
 // --- Theme Management ---
 
@@ -58,7 +60,20 @@ async function initTheme() {
 
 initTheme();
 
-// --- Verse Display ---
+// --- Tab Management ---
+
+const tabBtns = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
+const tabPanels = document.querySelectorAll<HTMLElement>('.tab-panel');
+
+tabBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    tabBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    tabPanels.forEach((p) => p.classList.toggle('active', p.id === `${tab}-panel`));
+  });
+});
+
+// --- Verse Display (existing tab) ---
 
 interface VerseData {
   reference: string;
@@ -218,5 +233,110 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 
 loadCurrentVerse();
+
+// --- Browse Tab ---
+
+const bookSelect = document.getElementById('book-select') as HTMLSelectElement;
+const chapterSelect = document.getElementById('chapter-select') as HTMLSelectElement;
+const verseSelect = document.getElementById('verse-select') as HTMLSelectElement;
+const browseContentEl = document.getElementById('browse-content')!;
+
+const TRANSLATION = 'NKJV';
+const BASE_URL = 'https://bolls.life';
+
+// Populate book select
+for (const book of Object.keys(BIBLE_BOOKS)) {
+  const option = document.createElement('option');
+  option.value = book;
+  option.textContent = book;
+  bookSelect.appendChild(option);
+}
+
+bookSelect.addEventListener('change', () => {
+  const book = bookSelect.value;
+
+  chapterSelect.innerHTML = '<option value="">Chapter</option>';
+  verseSelect.innerHTML = '<option value="">Verse</option>';
+  verseSelect.disabled = true;
+  browseContentEl.innerHTML = '<div class="empty-state"><p>Select a chapter to read.</p></div>';
+
+  if (!book) {
+    chapterSelect.disabled = true;
+    return;
+  }
+
+  const count = BOOK_CHAPTER_COUNTS[book] ?? 1;
+  for (let i = 1; i <= count; i++) {
+    const option = document.createElement('option');
+    option.value = String(i);
+    option.textContent = String(i);
+    chapterSelect.appendChild(option);
+  }
+  chapterSelect.disabled = false;
+});
+
+chapterSelect.addEventListener('change', async () => {
+  const book = bookSelect.value;
+  const chapter = parseInt(chapterSelect.value, 10);
+
+  verseSelect.innerHTML = '<option value="">Verse</option>';
+  verseSelect.disabled = true;
+
+  if (!book || !chapter) return;
+
+  browseContentEl.innerHTML = `<div class="loading-state"><p>Loading ${book} ${chapter}...</p></div>`;
+
+  try {
+    const bookNum = BOOK_NUMBERS[book];
+    const response = await fetch(`${BASE_URL}/get-text/${TRANSLATION}/${bookNum}/${chapter}/`);
+    if (!response.ok) throw new Error('fetch failed');
+
+    const data: { verse: number; text: string }[] = await response.json();
+    const verses: ChapterVerse[] = data.map((v) => ({ verse: v.verse, text: stripHtml(v.text) }));
+
+    renderBrowseChapter(book, chapter, verses);
+
+    for (const v of verses) {
+      const option = document.createElement('option');
+      option.value = String(v.verse);
+      option.textContent = String(v.verse);
+      verseSelect.appendChild(option);
+    }
+    verseSelect.disabled = false;
+  } catch {
+    browseContentEl.innerHTML = `<div class="error-state"><p>Failed to load ${book} ${chapter}.</p></div>`;
+  }
+});
+
+verseSelect.addEventListener('change', () => {
+  const verse = parseInt(verseSelect.value, 10);
+  if (!verse) return;
+
+  browseContentEl.querySelectorAll<HTMLElement>('.chapter-verse.highlighted').forEach((el) => {
+    el.classList.remove('highlighted');
+  });
+
+  const verseEl = browseContentEl.querySelector<HTMLElement>(`[data-verse="${verse}"]`);
+  if (verseEl) {
+    verseEl.classList.add('highlighted');
+    verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+
+function renderBrowseChapter(book: string, chapter: number, verses: ChapterVerse[]) {
+  const versesHtml = verses
+    .map(
+      (v) =>
+        `<div class="chapter-verse" data-verse="${v.verse}"><span class="verse-num">${v.verse}</span> ${v.text}</div>`
+    )
+    .join('');
+
+  browseContentEl.innerHTML = `
+    <div class="chapter-view">
+      <div class="chapter-header">${book} ${chapter} (${TRANSLATION})</div>
+      <div class="chapter-content">${versesHtml}</div>
+    </div>
+  `;
+}
 
 console.log('[Phosphora] Side panel loaded');

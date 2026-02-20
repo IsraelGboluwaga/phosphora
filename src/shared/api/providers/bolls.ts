@@ -1,12 +1,8 @@
 import type { BibleAPIProvider, ChapterData, VerseRequest, VerseResponse } from "../types";
 import { BOOK_NUMBERS } from "@shared/constants";
-import { formatReference } from "@shared/utils";
+import { formatReference, stripHtml } from "@shared/utils";
 
 const BASE_URL = "https://bolls.life";
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, "").trim();
-}
 
 async function fetchSingleVerse(
   translation: string,

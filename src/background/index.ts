@@ -26,7 +26,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
     try {
       const tab = await chrome.tabs.get(tabId);
       if (tab.windowId) {
-        await chrome.sidePanel.close({ tabId });
+        await (chrome.sidePanel as typeof chrome.sidePanel & { close(options: { tabId: number }): Promise<void> }).close({ tabId });
       }
     } catch {
       // Tab may not exist or panel already closed - ignore
