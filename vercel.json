@@ -1,0 +1,4 @@
+{
+  "buildCommand": "yarn build && zip -r public/phosphora.zip dist/",
+  "outputDirectory": "public"
+}

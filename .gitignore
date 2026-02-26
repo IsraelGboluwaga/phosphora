@@ -1,5 +1,6 @@
 node_modules/
 dist/
+public/phosphora.zip
 *.log
 .DS_Store
 
